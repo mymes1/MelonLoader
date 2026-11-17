@@ -17,6 +17,7 @@ class PortStagingTests(unittest.TestCase):
         self.dotnet = self.base / "runtime"
         self.bootstrap = self.base / "bootstrap.so"
         self.bridge = self.base / "bridge.so"
+        self.dex = self.base / "dex"
         self.output = self.base / "output"
         for file in (self.managed / "net6/MelonLoader.dll",
                      self.managed / "net6/MelonLoader.NativeHost.dll",
@@ -24,7 +25,7 @@ class PortStagingTests(unittest.TestCase):
                      self.managed / "Dependencies/SupportModules/Il2Cpp.dll",
                      self.dotnet / "host/fxr/8.0.6/libhostfxr.so",
                      self.dotnet / "shared/Microsoft.NETCore.App/8.0.6/libcoreclr.so",
-                     self.bootstrap, self.bridge):
+                     self.bootstrap, self.bridge, self.dex / "classes.dex"):
             file.parent.mkdir(parents=True, exist_ok=True)
             file.write_bytes(b"fixture")
 
@@ -32,15 +33,22 @@ class PortStagingTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def stage(self):
-        module.stage(self.managed, self.dotnet, self.bootstrap, self.bridge, self.output)
+        module.stage(self.managed, self.dotnet, self.bootstrap, self.bridge, self.dex, self.output)
 
     def test_layout_and_no_overwrite(self):
         self.stage()
         self.assertTrue((self.output / "assets/MelonLoader/net6/MelonLoader.dll").is_file())
         self.assertTrue((self.output / "assets/dotnet/host/fxr/8.0.6/libhostfxr.so").is_file())
         self.assertTrue((self.output / "lib/arm64-v8a/libMelonLoader.Bootstrap.so").is_file())
+        self.assertTrue((self.output / "dex/classes.dex").is_file())
         with self.assertRaisesRegex(ValueError, "already exists"):
             self.stage()
+
+    def test_missing_dex_never_creates_output(self):
+        (self.dex / "classes.dex").unlink()
+        with self.assertRaisesRegex(ValueError, "classes.dex"):
+            self.stage()
+        self.assertFalse(self.output.exists())
 
     def test_missing_runtime_never_creates_output(self):
         (self.dotnet / "host/fxr/8.0.6/libhostfxr.so").unlink()

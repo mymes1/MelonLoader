@@ -81,14 +81,19 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/melon073-classes" "${RUNNER_TEMP}/melon073-components/dex"
-          javac --release 8 -cp "$ANDROID_HOME/platforms/android-35/android.jar" \
+          javac --release 8 -cp "$ANDROID_HOME/platforms/android-35/android.jar:JavaBindings/deps/dexpatcher_annotations.jar" \
             -d "${RUNNER_TEMP}/melon073-classes" \
-            AndroidPort073/java/com/melonloader/port073/Loader073.java
+            AndroidPort073/java/com/melonloader/port073/Loader073.java \
+            AndroidPort073/java/com/unity3d/player/UnityPlayerActivity.java
           jar --create --file "${RUNNER_TEMP}/melon073-java.jar" -C "${RUNNER_TEMP}/melon073-classes" .
           "$ANDROID_HOME/build-tools/35.0.0/d8" --min-api 23 \
             --lib "$ANDROID_HOME/platforms/android-35/android.jar" \
+            --classpath JavaBindings/deps/dexpatcher_annotations.jar \
             --output "${RUNNER_TEMP}/melon073-components/dex" "${RUNNER_TEMP}/melon073-java.jar"
           test -f "${RUNNER_TEMP}/melon073-components/dex/classes.dex"
+      - name: Test lifecycle hook against synthetic dex with real DexPatcher
+        shell: bash
+        run: AndroidPort073/tests/test-dex-hook.sh
       - name: Upload experimental bridge components (not an APK)
         uses: actions/upload-artifact@v4
         with:

@@ -29,6 +29,10 @@ been verified for this 0.7.3 build.
   entry point. The Java side copies payloads and Unity data into private app
   storage and the native shim asks the 0.7.3 bootstrap to hook the already-loaded
   Unity library. A failed PLT hook is reported rather than treated as success.
+- `java/com/unity3d/player/UnityPlayerActivity.java` is an experimental
+  DexPatcher prepend hook. It stages the payload, preloads Unity, and attempts
+  bootstrap initialization before the original `onCreate`; the workflow verifies
+  injection into a synthetic activity, not into an actual Unity game.
 - `stage.py` creates an asset/native-library directory tree from **prebuilt**
   managed code, an Android .NET runtime, the bootstrap, and JNI bridge. It checks
   for the expected files, refuses symlinks and existing output, and never patches
@@ -54,11 +58,13 @@ been verified for this 0.7.3 build.
    logging and any missing runtime-specific native symbols. `libil2cpp.so` and
    game data extraction here are only an initial adaptation; Unity versions,
    asset layouts and split APKs differ.
-4. Build dex bindings and integrate a **verified** Unity lifecycle hook. The
-   bridge requires `libunity.so` to be loaded but must attach before Unity looks
-   up `il2cpp_init`; the legacy `UnityPlayerActivity.onCreate` hook has **not**
-   been shown to meet that requirement. No dex patching step invokes `Loader073`
-   yet. Do not use the legacy installer with this payload.
+4. Verify the new `UnityPlayerActivity.onCreate` dex hook on actual games and
+   Unity versions. It preloads `libunity.so` and attempts to attach the PLT hook
+   before the original `onCreate`, but has not been shown to run before Unity
+   looks up `il2cpp_init` or to be compatible with Unity JNI initialization.
+   Custom activities, UnityPlayerGameActivity, and split APKs are unsupported.
+   No APK patcher currently consumes this dex. Do not use the legacy installer
+   or Windows legacy patcher with this payload.
 5. Create, align, sign and verify a test APK; test supported Unity versions and
    Android devices, including 16 KB pages, storage restrictions, and app signing.
    Re-signing normally prevents updating the store-signed app and uninstalling
@@ -73,11 +79,12 @@ python3 AndroidPort073/stage.py \
   --dotnet /path/to/bionic/dotnet \
   --bootstrap /path/to/libMelonLoader.Bootstrap.so \
   --bridge /path/to/libmelonloader073_bridge.so \
+  --dex /path/to/compiled-073-patch-dex-directory \
   --output /path/to/new-payload-directory
 ```
 
 The staged tree contains `assets/MelonLoader`, `assets/dotnet` and
-`lib/arm64-v8a`; it is **not** a signed or patched APK. The current extractor
+`lib/arm64-v8a` and `dex/classes.dex`; it is **not** a signed or patched APK. The current extractor
 copies all `assets/bin/Data` to private storage each initialization, which can
 require substantial free space and time. It handles only an arm64 native library
 inside the base APK, not split APKs. Mods would be under the app's **private**
@@ -87,7 +94,7 @@ file managers may not be able to access it.
 ## Tests
 
 Run `python3 -m unittest discover -s tests -v`. The 0.7.3 workflow attempts
-component builds and publishes separate experimental artifacts; a green run is
-not evidence that the incomplete loader works on Android. Staging tests use dummy files;
+component builds, verifies the hook against synthetic dex with real DexPatcher,
+and publishes separate experimental artifacts; a green run is not evidence that the incomplete loader works on Android. Staging tests use dummy files;
 the JNI shim test compiles against host stubs. These do not build the managed
 projects, test the Android NDK, package a real APK, or run on a device.

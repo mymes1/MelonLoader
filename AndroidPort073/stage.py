@@ -23,19 +23,19 @@ def copy_tree(source, destination):
     shutil.copytree(source, destination)
 
 
-def stage(managed, dotnet, bootstrap, bridge, output):
-    managed, dotnet, bootstrap, bridge, output = map(
-        lambda p: Path(p).absolute(), (managed, dotnet, bootstrap, bridge, output))
+def stage(managed, dotnet, bootstrap, bridge, dex, output):
+    managed, dotnet, bootstrap, bridge, dex, output = map(
+        lambda p: Path(p).absolute(), (managed, dotnet, bootstrap, bridge, dex, output))
     for relative in ("net6/MelonLoader.dll", "net6/MelonLoader.NativeHost.dll",
                      "net6/MelonLoader.runtimeconfig.json", "Dependencies/SupportModules/Il2Cpp.dll"):
         require_file(managed / relative)
-    for path in (bootstrap, bridge):
+    for path in (bootstrap, bridge, dex / "classes.dex"):
         require_file(path)
     if not any((dotnet / "host/fxr").glob("*/libhostfxr.so")):
         raise ValueError("Android dotnet root must contain host/fxr/<version>/libhostfxr.so")
     if not any((dotnet / "shared/Microsoft.NETCore.App").glob("*/libcoreclr.so")):
         raise ValueError("Android dotnet root must contain shared/Microsoft.NETCore.App/<version>/libcoreclr.so")
-    for source in (managed, dotnet):
+    for source in (managed, dotnet, dex):
         if output.parent.resolve().is_relative_to(source.resolve()):
             raise ValueError("Output must be outside the input trees")
     if output.exists() or output.is_symlink():
@@ -45,6 +45,7 @@ def stage(managed, dotnet, bootstrap, bridge, output):
         staged = Path(tmp) / "payload"
         copy_tree(managed, staged / "assets/MelonLoader")
         copy_tree(dotnet, staged / "assets/dotnet")
+        copy_tree(dex, staged / "dex")
         native = staged / "lib/arm64-v8a"
         native.mkdir(parents=True)
         shutil.copyfile(bootstrap, native / "libMelonLoader.Bootstrap.so")
@@ -54,11 +55,11 @@ def stage(managed, dotnet, bootstrap, bridge, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for option in ("managed", "dotnet", "bootstrap", "bridge", "output"):
+    for option in ("managed", "dotnet", "bootstrap", "bridge", "dex", "output"):
         parser.add_argument("--" + option, required=True, type=Path)
     args = parser.parse_args()
     try:
-        stage(args.managed, args.dotnet, args.bootstrap, args.bridge, args.output)
+        stage(args.managed, args.dotnet, args.bootstrap, args.bridge, args.dex, args.output)
     except (OSError, ValueError) as error:
         parser.exit(1, f"error: {error}\n")
 

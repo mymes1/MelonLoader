@@ -10,13 +10,20 @@ import java.io.InputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-/** Experimental entry point. Not wired to the legacy patcher. */
+/** Experimental entry point for the 0.7.3 activity patch. */
 public final class Loader073 {
     private static final String TAG = "MelonLoader073";
     private Loader073() { }
     private static native boolean initializeNative(String baseDirectory);
 
-    public static boolean initialize(Activity activity) {
+    // Unity activities can be recreated. Do not install native hooks twice or
+    // retry after a partial native initialization.
+    private static boolean attempted;
+    private static boolean initialized;
+
+    public static synchronized boolean initialize(Activity activity) {
+        if (attempted) return initialized;
+        attempted = true;
         try {
             File base = new File(activity.getFilesDir(), "melonloader073");
             if (!base.isDirectory() && !base.mkdirs())
@@ -28,11 +35,17 @@ public final class Loader073 {
             // The 0.7.3 reader expects a filesystem Game_Data directory.
             copyTree(assets, "bin/Data", new File(base, "Game_Data"));
             copyGameAssembly(activity, new File(base, "GameAssembly.so"));
+            // Unity normally loads this in its player initialization. Preload it
+            // here so that the native shim can install its PLT hook before the
+            // original Activity.onCreate starts the player. JNI_OnLoad timing and
+            // dlsym usage still need verification on real Unity builds.
+            System.loadLibrary("unity");
             System.loadLibrary("melonloader073_bridge");
             if (!initializeNative(base.getAbsolutePath())) {
                 Log.e(TAG, "Bootstrap initialization failed");
                 return false;
             }
+            initialized = true;
             return true;
         } catch (Exception | LinkageError e) {
             Log.e(TAG, "Unable to initialize experimental 0.7.3 loader", e);
