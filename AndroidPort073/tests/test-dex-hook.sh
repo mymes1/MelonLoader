@@ -31,6 +31,8 @@ activity = text.split("Class descriptor  : 'Lcom/unity3d/player/UnityPlayerActiv
 activity = activity.split("Class #", 1)[0]
 method = re.search(r"name\s+: 'onCreate'.*?(?=\n\s*#\d+\s+:|\Z)", activity, re.S)
 assert method, 'patched onCreate not found'
+print('Patched activity disassembly:')
+print(activity)
 assert 'Lcom/melonloader/port073/Loader073;.initialize' in method.group(), 'onCreate did not invoke Loader073.initialize'
 assert 'Landroid/app/Activity;.onCreate' in method.group(), 'original activity body was lost'
 PY
