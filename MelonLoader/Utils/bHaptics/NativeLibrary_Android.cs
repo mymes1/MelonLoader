@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using UnmanageUtility;
 
 #if __ANDROID__
 namespace MelonLoader
@@ -18,30 +17,20 @@ namespace MelonLoader
 
         public static void SubmitDot(string key, bHaptics.PositionType position, int[] indexes, int[] intensities, int duration)
         {
-            // var data = new byte[]
-            // {
-            //     100, 0, 0, 0, 0,
-            //     100, 0, 0, 0, 0,
-            //     100, 0, 0, 0, 0,
-            //     100, 0, 0, 0, 0,
-            // }; 
-            // HapticApi.SubmitByteArray(key, position, data, data.Length, 1000);
-            // Start();
-            // var sizes = new[] { indexes.Length, intensities.Length };
-            // var sizes = new int[2] { indexes.Length, intensities.Length };
-            // var handle = GCHandle.Alloc(sizes, GCHandleType.Pinned);
+            if (indexes == null) throw new ArgumentNullException(nameof(indexes));
+            if (intensities == null) throw new ArgumentNullException(nameof(intensities));
 
-            // MelonDebug.Msg($"Sizes {sizes[0]} {sizes[1]}");
-            
-            // var handle = GCHandle.Alloc(objects, GCHandleType.Pinned);
-            var nativeIndexes = indexes.ToUnmanagedArray();
-            var nativeIntensities = intensities.ToUnmanagedArray();
-
-            Internal_SubmitDot(key, position.ToString(), nativeIndexes.Ptr, nativeIndexes.Length, nativeIntensities.Ptr, nativeIntensities.Length, 1);
-            
-            nativeIndexes.Dispose();
-            nativeIntensities.Dispose();
-            // handle.Free();
+            // The native call consumes the arrays synchronously. Pin them for the
+            // call instead of depending on a net48-only UnmanagedArray assembly.
+            unsafe
+            {
+                fixed (int* nativeIndexes = indexes)
+                fixed (int* nativeIntensities = intensities)
+                {
+                    Internal_SubmitDot(key, position.ToString(), (IntPtr)nativeIndexes, indexes.Length,
+                        (IntPtr)nativeIntensities, intensities.Length, duration);
+                }
+            }
         }
 
         public static byte[] GetPositionStatus(bHaptics.PositionType position)

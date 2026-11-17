@@ -114,11 +114,6 @@
       <SetTargetFramework>TargetFramework=net40</SetTargetFramework>
     </ProjectReference>
   </ItemGroup>
-  <ItemGroup>
-    <Reference Include="UnmanagedArray, Version=2.1.3.0, Culture=neutral, PublicKeyToken=null">
-      <HintPath>..\UnmanagedArray.dll</HintPath>
-    </Reference>
-  </ItemGroup>
   <ItemDefinitionGroup>
     <PackageReference ExcludeAssets="runtime" />
   </ItemDefinitionGroup>
