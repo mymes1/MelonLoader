@@ -1,0 +1,54 @@
+name: Build Windows APK patcher
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run packaging contract tests
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'patcher-test.log'
+          dotnet run --project WindowsPatcher/Tests/Tests.csproj -c Release 2>&1 | Tee-Object -FilePath $log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            Get-Content $log | Select-String -Pattern 'error [A-Z]+[0-9]+|Unhandled exception|error :' | Select-Object -Last 15 | ForEach-Object {
+              $line = $_.Line.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+              Write-Host "::error::$line"
+            }
+            exit $code
+          }
+      - name: Publish self-contained Windows x64 executable
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'patcher-publish.log'
+          dotnet publish WindowsPatcher/App/App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false -o "$env:RUNNER_TEMP/patcher" 2>&1 | Tee-Object -FilePath $log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            Get-Content $log | Select-String -Pattern 'error [A-Z]+[0-9]+|error :' | Select-Object -Last 15 | ForEach-Object {
+              $line = $_.Line.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+              Write-Host "::error::$line"
+            }
+            exit $code
+          }
+          if (!(Test-Path "$env:RUNNER_TEMP/patcher/MelonLoader.LegacyApkPatcher.exe")) { throw 'Patcher executable missing' }
+          Copy-Item WindowsPatcher/README.md "$env:RUNNER_TEMP/patcher/README.md"
+          Copy-Item LICENSE.md "$env:RUNNER_TEMP/patcher/LICENSE.md"
+          Copy-Item NOTICE.txt "$env:RUNNER_TEMP/patcher/NOTICE.txt"
+      - uses: actions/upload-artifact@v4
+        name: Upload Windows executable
+        with:
+          name: MelonLoader-Legacy-APK-Patcher-Windows-x64
+          path: ${{ runner.temp }}/patcher/
+          if-no-files-found: error
