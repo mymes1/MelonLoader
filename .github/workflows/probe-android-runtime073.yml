@@ -43,6 +43,7 @@ jobs:
                   if e.code == 404: print(f'{package}: not published')
                   else: raise
           PY
+          while IFS= read -r line; do echo "::notice::$line"; done < "$RUNNER_TEMP/runtime-probe/nuget-availability.txt"
       - name: Inspect LemonLoader reference runtime bundle
         shell: bash
         run: |
@@ -53,6 +54,7 @@ jobs:
           unzip -Z1 "$RUNNER_TEMP/melon_data.zip" > "$RUNNER_TEMP/runtime-probe/lemon-bundle-file-list.txt"
           grep -E '(^|/)(dotnet|hostfxr|coreclr|monosgen|libmain)' "$RUNNER_TEMP/runtime-probe/lemon-bundle-file-list.txt" | head -80 || true
           sha256sum "$RUNNER_TEMP/melon_data.zip" > "$RUNNER_TEMP/runtime-probe/lemon-bundle-sha256.txt"
+          grep -E '(^|/)(hostfxr|libhostfxr|libcoreclr|libmonosgen|libmain)' "$RUNNER_TEMP/runtime-probe/lemon-bundle-file-list.txt" | head -40 | while IFS= read -r line; do echo "::notice::$line"; done
       - uses: actions/upload-artifact@v4
         with:
           name: android-runtime-availability-report
@@ -70,10 +72,9 @@ jobs:
       - name: Attempt 0.7.3 ARM64 bionic NativeAOT bootstrap
         working-directory: AndroidPort073/upstream
         shell: bash
-        env:
-          ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
         run: |
           set -o pipefail
+          export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/27.2.12479018"
           dotnet publish MelonLoader.Bootstrap/MelonLoader.Bootstrap.csproj \
             -c Release -r linux-bionic-arm64 \
             -p:RuntimeIdentifiers=linux-bionic-arm64 -p:AndroidPort=true \
