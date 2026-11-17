@@ -4,6 +4,8 @@ on:
     paths:
       - 'AndroidPort073/InteropGen/**'
       - '.github/workflows/build-interop073.yml'
+      - 'AndroidPort073/InteropValidationTests/**'
+      - 'AndroidPort073/upstream/Dependencies/Il2CppAssemblyGenerator/PreGeneratedInterop.cs'
   workflow_dispatch:
 permissions:
   contents: read
@@ -57,3 +59,10 @@ jobs:
           test -f "$RUNNER_TEMP/generated-interop/Assembly-CSharp.dll"
           test -f "$RUNNER_TEMP/generated-interop/melon-interop-manifest.txt"
           echo "::notice::Actual Cpp2IL and Il2CppInterop generated proxy DLLs from the public Unity fixture."
+      - name: Test Android-side interop identity validator
+        run: |
+          fixture="$PWD/cpp2il-fixtures/TestFiles/Simple_2019_4_34"
+          dotnet run --project AndroidPort073/InteropValidationTests/Tests.csproj -c Release -- \
+            "$fixture/GameAssembly.dll" \
+            "$fixture/Simple_2019_4_34_Data/il2cpp_data/Metadata/global-metadata.dat" \
+            "$RUNNER_TEMP/generated-interop"

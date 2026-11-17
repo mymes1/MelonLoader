@@ -18,11 +18,14 @@ class PortStagingTests(unittest.TestCase):
         self.bootstrap = self.base / "bootstrap.so"
         self.bridge = self.base / "bridge.so"
         self.dex = self.base / "dex"
+        self.interop = self.base / "interop"
         self.output = self.base / "output"
         for file in (self.managed / "net6/MelonLoader.dll",
                      self.managed / "net6/MelonLoader.NativeHost.dll",
                      self.managed / "net6/MelonLoader.runtimeconfig.json",
                      self.managed / "Dependencies/SupportModules/Il2Cpp.dll",
+                     self.managed / "Dependencies/Il2CppAssemblyGenerator/Il2CppAssemblyGenerator.dll",
+                     self.interop / "melon-interop-manifest.txt",
                      self.dotnet / "host/fxr/8.0.6/libhostfxr.so",
                      self.dotnet / "shared/Microsoft.NETCore.App/8.0.6/libcoreclr.so",
                      self.bootstrap, self.bridge, self.dex / "classes.dex"):
@@ -33,7 +36,7 @@ class PortStagingTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def stage(self):
-        module.stage(self.managed, self.dotnet, self.bootstrap, self.bridge, self.dex, self.output)
+        module.stage(self.managed, self.dotnet, self.bootstrap, self.bridge, self.dex, self.interop, self.output)
 
     def test_layout_and_no_overwrite(self):
         self.stage()
@@ -41,6 +44,7 @@ class PortStagingTests(unittest.TestCase):
         self.assertTrue((self.output / "assets/dotnet/host/fxr/8.0.6/libhostfxr.so").is_file())
         self.assertTrue((self.output / "lib/arm64-v8a/libMelonLoader.Bootstrap.so").is_file())
         self.assertTrue((self.output / "dex/classes.dex").is_file())
+        self.assertTrue((self.output / "assets/MelonLoader/Il2CppAssemblies/melon-interop-manifest.txt").is_file())
         with self.assertRaisesRegex(ValueError, "already exists"):
             self.stage()
 

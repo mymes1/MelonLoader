@@ -23,19 +23,20 @@ def copy_tree(source, destination):
     shutil.copytree(source, destination)
 
 
-def stage(managed, dotnet, bootstrap, bridge, dex, output):
-    managed, dotnet, bootstrap, bridge, dex, output = map(
-        lambda p: Path(p).absolute(), (managed, dotnet, bootstrap, bridge, dex, output))
+def stage(managed, dotnet, bootstrap, bridge, dex, interop, output):
+    managed, dotnet, bootstrap, bridge, dex, interop, output = map(
+        lambda p: Path(p).absolute(), (managed, dotnet, bootstrap, bridge, dex, interop, output))
     for relative in ("net6/MelonLoader.dll", "net6/MelonLoader.NativeHost.dll",
-                     "net6/MelonLoader.runtimeconfig.json", "Dependencies/SupportModules/Il2Cpp.dll"):
+                     "net6/MelonLoader.runtimeconfig.json", "Dependencies/SupportModules/Il2Cpp.dll",
+                     "Dependencies/Il2CppAssemblyGenerator/Il2CppAssemblyGenerator.dll"):
         require_file(managed / relative)
-    for path in (bootstrap, bridge, dex / "classes.dex"):
+    for path in (bootstrap, bridge, dex / "classes.dex", interop / "melon-interop-manifest.txt"):
         require_file(path)
     if not any((dotnet / "host/fxr").glob("*/libhostfxr.so")):
         raise ValueError("Android dotnet root must contain host/fxr/<version>/libhostfxr.so")
     if not any((dotnet / "shared/Microsoft.NETCore.App").glob("*/libcoreclr.so")):
         raise ValueError("Android dotnet root must contain shared/Microsoft.NETCore.App/<version>/libcoreclr.so")
-    for source in (managed, dotnet, dex):
+    for source in (managed, dotnet, dex, interop):
         if output.parent.resolve().is_relative_to(source.resolve()):
             raise ValueError("Output must be outside the input trees")
     if output.exists() or output.is_symlink():
@@ -44,6 +45,10 @@ def stage(managed, dotnet, bootstrap, bridge, dex, output):
     with tempfile.TemporaryDirectory(prefix=".melonloader073-", dir=output.parent) as tmp:
         staged = Path(tmp) / "payload"
         copy_tree(managed, staged / "assets/MelonLoader")
+        target_interop = staged / "assets/MelonLoader/Il2CppAssemblies"
+        if target_interop.exists():
+            raise ValueError("Managed input must not contain Il2CppAssemblies")
+        copy_tree(interop, target_interop)
         copy_tree(dotnet, staged / "assets/dotnet")
         copy_tree(dex, staged / "dex")
         native = staged / "lib/arm64-v8a"
@@ -55,11 +60,11 @@ def stage(managed, dotnet, bootstrap, bridge, dex, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for option in ("managed", "dotnet", "bootstrap", "bridge", "dex", "output"):
+    for option in ("managed", "dotnet", "bootstrap", "bridge", "dex", "interop", "output"):
         parser.add_argument("--" + option, required=True, type=Path)
     args = parser.parse_args()
     try:
-        stage(args.managed, args.dotnet, args.bootstrap, args.bridge, args.dex, args.output)
+        stage(args.managed, args.dotnet, args.bootstrap, args.bridge, args.dex, args.interop, args.output)
     except (OSError, ValueError) as error:
         parser.exit(1, f"error: {error}\n")
 

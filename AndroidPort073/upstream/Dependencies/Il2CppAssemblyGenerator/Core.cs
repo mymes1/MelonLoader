@@ -56,8 +56,14 @@ namespace MelonLoader.Il2CppAssemblyGenerator
         private static int Run()
         {
 #if ANDROID
-            Logger.Error("Android IL2CPP assembly generation is not implemented. Desktop Cpp2IL cannot run on Android.");
-            return 1;
+            string metadata = Path.Combine(MelonEnvironment.Il2CppDataDirectory, "Metadata", "global-metadata.dat");
+            if (!PreGeneratedInterop.Validate(GameAssemblyPath, metadata, MelonEnvironment.Il2CppAssembliesDirectory, out string error))
+            {
+                Logger.Error("Pre-generated Android interop assemblies are missing or do not match this game: " + error);
+                return 1;
+            }
+            Logger.Msg("Using verified pre-generated interop assemblies for this game.");
+            return 0;
 #else
             Config.Initialize();
 
