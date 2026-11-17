@@ -61,8 +61,14 @@ jobs:
           echo "::notice::Actual Cpp2IL and Il2CppInterop generated proxy DLLs from the public Unity fixture."
       - name: Test Android-side interop identity validator
         run: |
+          set -o pipefail
           fixture="$PWD/cpp2il-fixtures/TestFiles/Simple_2019_4_34"
           dotnet run --project AndroidPort073/InteropValidationTests/Tests.csproj -c Release -- \
             "$fixture/GameAssembly.dll" \
             "$fixture/Simple_2019_4_34_Data/il2cpp_data/Metadata/global-metadata.dat" \
-            "$RUNNER_TEMP/generated-interop"
+            "$RUNNER_TEMP/generated-interop" 2>&1 | tee "$RUNNER_TEMP/validator.log"
+          result=${PIPESTATUS[0]}
+          if [[ $result -ne 0 ]]; then
+            tail -20 "$RUNNER_TEMP/validator.log" | while IFS= read -r line; do echo "::error::${line//%/%25}"; done
+            exit "$result"
+          fi

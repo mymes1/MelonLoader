@@ -24,6 +24,9 @@ jobs:
         working-directory: AndroidPort073/upstream
         run: |
           set -euo pipefail
+          log="$RUNNER_TEMP/managed073.log"
+          exec > >(tee "$log") 2>&1
+          trap 'code=$?; if [[ $code -ne 0 ]]; then tail -25 "$log" | while IFS= read -r line; do echo "::error::${line//%/%25}"; done; fi' EXIT
           common=(
             -c Release
             -p:AndroidPort=true
@@ -118,6 +121,9 @@ jobs:
         working-directory: AndroidPort073/upstream
         run: |
           set -euo pipefail
+          log="$RUNNER_TEMP/bootstrap073.log"
+          exec > >(tee "$log") 2>&1
+          trap 'code=$?; if [[ $code -ne 0 ]]; then tail -25 "$log" | while IFS= read -r line; do echo "::error::${line//%/%25}"; done; fi' EXIT
           export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/27.2.12479018"
           dotnet publish MelonLoader.Bootstrap/MelonLoader.Bootstrap.csproj \
             -c Release -r linux-bionic-arm64 \
@@ -127,9 +133,9 @@ jobs:
             -p:SkipPublishAfterBuild=true -o "$RUNNER_TEMP/bootstrap"
           library="$RUNNER_TEMP/bootstrap/MelonLoader.Bootstrap.so"
           test -f "$library"
-          readelf -h "$library" | grep -q 'AArch64'
-          readelf --dyn-syms -W "$library" | grep -q ' MelonLoaderAndroidInitialize$'
-          if readelf -d "$library" | grep -q 'libc.so.6'; then echo '::error::glibc dependency in Android bootstrap'; exit 1; fi
+          readelf -h "$library" | grep 'AArch64' >/dev/null
+          readelf --dyn-syms -W "$library" | grep ' MelonLoaderAndroidInitialize$' >/dev/null
+          if readelf -d "$library" | grep 'libc.so.6' >/dev/null; then echo '::error::glibc dependency in Android bootstrap'; exit 1; fi
           mv "$library" "$RUNNER_TEMP/bootstrap/libMelonLoader.Bootstrap.so"
       - uses: actions/upload-artifact@v4
         with:
@@ -154,8 +160,8 @@ jobs:
           runtime="$RUNNER_TEMP/reference-runtime/dotnet"
           for so in "$runtime/host/fxr/8.0.6/libhostfxr.so" "$runtime/shared/Microsoft.NETCore.App/8.0.6/libcoreclr.so"; do
             test -f "$so"
-            readelf -h "$so" | grep -q 'AArch64'
-            if readelf -d "$so" | grep -q 'libc.so.6'; then echo '::error::glibc dependency in Android runtime'; exit 1; fi
+            readelf -h "$so" | grep 'AArch64' >/dev/null
+            if readelf -d "$so" | grep 'libc.so.6' >/dev/null; then echo '::error::glibc dependency in Android runtime'; exit 1; fi
           done
           curl --fail --location --silent --show-error https://raw.githubusercontent.com/dotnet/runtime/v8.0.6/LICENSE.TXT -o "$RUNNER_TEMP/reference-runtime/DOTNET-LICENSE.txt"
           printf '%s\n' 'Reference runtime extracted from LemonLoader 0.6.5.1 melon_data.zip.' 'SHA-256: 1c8bab9b0bf7a462f5efe03e8dc253f0f520357915641669d0910f6a9800f3a6' 'Experimental, not verified with this 0.7.3 port or on a device.' > "$RUNNER_TEMP/reference-runtime/PROVENANCE.txt"
