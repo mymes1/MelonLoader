@@ -208,8 +208,13 @@ public sealed partial class ApkPatcher(IToolRunner runner)
         {
             ct.ThrowIfCancellationRequested();
             if (DexName().IsMatch(entry.FullName) || IsSignature(entry.FullName)) continue;
-            var dest = target.CreateEntry(entry.FullName, entry.FullName.EndsWith(".so", StringComparison.OrdinalIgnoreCase)
-                ? CompressionLevel.NoCompression : CompressionLevel.Optimal);
+            // Android requires resources.arsc to be stored on modern devices.
+            // Preserve other stored entries (notably Unity streaming assets), and
+            // always store native libraries so zipalign can page-align them.
+            bool store = entry.FullName.EndsWith(".so", StringComparison.OrdinalIgnoreCase)
+                || entry.FullName.Equals("resources.arsc", StringComparison.OrdinalIgnoreCase)
+                || entry.CompressedLength == entry.Length;
+            var dest = target.CreateEntry(entry.FullName, store ? CompressionLevel.NoCompression : CompressionLevel.Optimal);
             dest.LastWriteTime = entry.LastWriteTime;
             using var input = entry.Open();
             using var outputStream = dest.Open();

@@ -48,6 +48,9 @@ try
         Add("lib/arm64-v8a/libil2cpp.so", "original-il2cpp");
         Add("META-INF/OLD.SF", "old-signature");
         Add("META-INF/services/test", "keep-metadata");
+        Add("resources.arsc", new string('r', 1000));
+        using (var stored = new StreamWriter(apk.CreateEntry("assets/stored.bin", CompressionLevel.NoCompression).Open()))
+            stored.Write(new string('s', 1000));
     }
     var options = new PatchOptions(apkPath, outputPath, Path.Combine(root, "payload"), Path.Combine(root, "unity"),
         java, dexPatcher, Path.Combine(root, "buildtools"), keystore, "alias", "secret", null);
@@ -63,6 +66,8 @@ try
         Check(Read("lib/arm64-v8a/libunity.so") == "original-unity", "libunity was replaced");
         Check(apk.GetEntry("META-INF/OLD.SF") == null, "old signature retained");
         Check(Read("META-INF/services/test") == "keep-metadata", "non-signature metadata removed");
+        Check(apk.GetEntry("resources.arsc")!.CompressedLength == apk.GetEntry("resources.arsc")!.Length, "resources.arsc must be stored");
+        Check(apk.GetEntry("assets/stored.bin")!.CompressedLength == apk.GetEntry("assets/stored.bin")!.Length, "stored asset was recompressed");
         Check(apk.GetEntry("assets/melonloader/etc/managed/mscorlib.dll") != null, "payload missing");
     }
     await ExpectFailure(() => new ApkPatcher(new FakeRunner()).PatchAsync(options), "existing output must not be overwritten");
