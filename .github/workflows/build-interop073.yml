@@ -1,0 +1,59 @@
+name: Test experimental 0.7.3 offline interop generation
+on:
+  push:
+    paths:
+      - 'AndroidPort073/InteropGen/**'
+      - '.github/workflows/build-interop073.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build offline generator
+        shell: bash
+        run: |
+          set -o pipefail
+          dotnet build AndroidPort073/InteropGen/InteropGen.csproj -c Release 2>&1 | tee "$RUNNER_TEMP/build-interop.log"
+          result=${PIPESTATUS[0]}
+          if [[ $result -ne 0 ]]; then
+            grep -E 'error [A-Z]+[0-9]+|error :' "$RUNNER_TEMP/build-interop.log" | tail -20 | while IFS= read -r line; do echo "::error::${line//%/%25}"; done
+            exit "$result"
+          fi
+      - uses: actions/checkout@v6
+        with:
+          repository: SamboyCoding/Cpp2IL
+          ref: b5ad444b82267cb1e4b88b8b373c008105bdea52
+          path: cpp2il-fixtures
+          sparse-checkout: TestFiles/Simple_2019_4_34
+      - name: Download the 0.7.3 Cpp2IL version
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/SamboyCoding/Cpp2IL/releases/download/2022.1.0-pre-release.21/Cpp2IL-2022.1.0-pre-release.21-Linux \
+            -o "$RUNNER_TEMP/Cpp2IL"
+          chmod +x "$RUNNER_TEMP/Cpp2IL"
+      - name: Generate interop from public Unity fixture
+        shell: bash
+        run: |
+          set -o pipefail
+          fixture="$PWD/cpp2il-fixtures/TestFiles/Simple_2019_4_34"
+          dotnet run --no-build -c Release --project AndroidPort073/InteropGen/InteropGen.csproj -- \
+            --binary "$fixture/GameAssembly.dll" \
+            --metadata "$fixture/Simple_2019_4_34_Data/il2cpp_data/Metadata/global-metadata.dat" \
+            --unity-version 2019.4.34f1 --unity-libs "$fixture/Managed" \
+            --cpp2il "$RUNNER_TEMP/Cpp2IL" --output "$RUNNER_TEMP/generated-interop" \
+            2>&1 | tee "$RUNNER_TEMP/interop-run.log"
+          result=${PIPESTATUS[0]}
+          if [[ $result -ne 0 ]]; then
+            tail -30 "$RUNNER_TEMP/interop-run.log" | while IFS= read -r line; do echo "::error::${line//%/%25}"; done
+            exit "$result"
+          fi
+          test -f "$RUNNER_TEMP/generated-interop/Assembly-CSharp.dll"
+          test -f "$RUNNER_TEMP/generated-interop/melon-interop-manifest.txt"
+          echo "::notice::Actual Cpp2IL and Il2CppInterop generated proxy DLLs from the public Unity fixture."
