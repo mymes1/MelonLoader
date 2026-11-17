@@ -54,6 +54,7 @@ jobs:
           unzip -Z1 "$RUNNER_TEMP/melon_data.zip" > "$RUNNER_TEMP/runtime-probe/lemon-bundle-file-list.txt"
           grep -E '(^|/)(dotnet|hostfxr|coreclr|monosgen|libmain)' "$RUNNER_TEMP/runtime-probe/lemon-bundle-file-list.txt" | head -80 || true
           sha256sum "$RUNNER_TEMP/melon_data.zip" > "$RUNNER_TEMP/runtime-probe/lemon-bundle-sha256.txt"
+          echo "::notice::$(cat "$RUNNER_TEMP/runtime-probe/lemon-bundle-sha256.txt")"
           grep -E '(^|/)(hostfxr|libhostfxr|libcoreclr|libmonosgen|libmain)' "$RUNNER_TEMP/runtime-probe/lemon-bundle-file-list.txt" | head -40 | while IFS= read -r line; do echo "::notice::$line"; done
       - uses: actions/upload-artifact@v4
         with:
@@ -80,7 +81,7 @@ jobs:
             -p:RuntimeIdentifiers=linux-bionic-arm64 -p:AndroidPort=true \
             -p:SolutionDir="$PWD/" -p:AppHostVersion=9.0.0 \
             -p:DisableUnsupportedError=true -p:PublishAotUsingRuntimePack=true \
-            -p:SkipPublishAfterBuild=true 2>&1 | tee "$RUNNER_TEMP/nativeaot-probe.log"
+            -p:SkipPublishAfterBuild=true -o "$RUNNER_TEMP/nativeaot-publish" 2>&1 | tee "$RUNNER_TEMP/nativeaot-probe.log"
           result=${PIPESTATUS[0]}
           if [[ $result -ne 0 ]]; then
             grep -E '(^| )error |error [A-Z]+[0-9]+' "$RUNNER_TEMP/nativeaot-probe.log" | tail -15 | while IFS= read -r line; do
@@ -88,3 +89,25 @@ jobs:
             done
             exit "$result"
           fi
+      - name: Check native bootstrap output
+        shell: bash
+        run: |
+          set -euo pipefail
+          find "$RUNNER_TEMP/nativeaot-publish" -type f -printf '%P\n' | tee "$RUNNER_TEMP/nativeaot-files.txt"
+          while IFS= read -r line; do echo "::notice::publish file: $line"; done < "$RUNNER_TEMP/nativeaot-files.txt"
+          shopt -s nullglob
+          libs=("$RUNNER_TEMP/nativeaot-publish"/*.so)
+          if [[ ${#libs[@]} -eq 0 ]]; then
+            echo '::error::dotnet publish succeeded but emitted no shared library'
+            exit 1
+          fi
+          for lib in "${libs[@]}"; do
+            echo "::notice::$(file "$lib")"
+            readelf -h "$lib" | grep -E 'Class:|Machine:'
+            readelf -Ws "$lib" | grep MelonLoaderAndroidInitialize
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: melonloader073-nativeaot-probe
+          path: ${{ runner.temp }}/nativeaot-publish/
+          if-no-files-found: error
