@@ -2,6 +2,10 @@
 # Proves the patch is applied to a synthetic UnityPlayerActivity, not that a
 # real Unity player or the unfinished 0.7.3 runtime can initialize.
 set -euo pipefail
+log="${RUNNER_TEMP:?}/melon073-hook-test.log"
+# Surface diagnostics as annotations even when the Actions log download is unavailable.
+trap 'status=$?; if [[ $status -ne 0 ]]; then tail -30 "$log" | while IFS= read -r line; do echo "::error::${line//%/%25}"; done; fi' EXIT
+exec > >(tee "$log") 2>&1
 root="${RUNNER_TEMP:?}/melon073-hook-test"
 mkdir -p "$root/classes" "$root/input" "$root/output"
 android="$ANDROID_HOME/platforms/android-35/android.jar"
