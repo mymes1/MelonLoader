@@ -48,6 +48,18 @@ class PortStagingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "already exists"):
             self.stage()
 
+    def test_missing_interop_never_creates_output(self):
+        (self.interop / "melon-interop-manifest.txt").unlink()
+        with self.assertRaisesRegex(ValueError, "melon-interop-manifest"):
+            self.stage()
+        self.assertFalse(self.output.exists())
+
+    def test_rejects_interop_embedded_in_managed_tree(self):
+        (self.managed / "Il2CppAssemblies").mkdir()
+        with self.assertRaisesRegex(ValueError, "must not contain"):
+            self.stage()
+        self.assertFalse(self.output.exists())
+
     def test_missing_dex_never_creates_output(self):
         (self.dex / "classes.dex").unlink()
         with self.assertRaisesRegex(ValueError, "classes.dex"):

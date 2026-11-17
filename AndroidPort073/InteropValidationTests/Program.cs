@@ -8,6 +8,19 @@ void Expect(bool expected, string test)
     if (actual != expected) throw new Exception($"{test}: got {actual}, error: {error}");
 }
 Expect(true, "generated interop");
+string originalGame = game;
+string alteredGame = Path.Combine(Path.GetTempPath(), "melon-validation-" + Guid.NewGuid().ToString("N"));
+try
+{
+    File.WriteAllText(alteredGame, "different game");
+    game = alteredGame;
+    Expect(false, "different game binary");
+}
+finally
+{
+    game = originalGame;
+    File.Delete(alteredGame);
+}
 string extra = Path.Combine(dir, "unexpected-test.dll");
 File.WriteAllText(extra, "unexpected");
 Expect(false, "untracked DLL");
