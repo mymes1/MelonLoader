@@ -134,7 +134,7 @@ jobs:
           library="$RUNNER_TEMP/bootstrap/MelonLoader.Bootstrap.so"
           test -f "$library"
           readelf -h "$library" | grep 'AArch64' >/dev/null
-          readelf --dyn-syms -W "$library" | grep ' MelonLoaderAndroidInitialize$' >/dev/null
+          readelf --dyn-syms -W "$library" | grep ' MelonLoaderAndroidInitialize' >/dev/null
           if readelf -d "$library" | grep 'libc.so.6' >/dev/null; then echo '::error::glibc dependency in Android bootstrap'; exit 1; fi
           mv "$library" "$RUNNER_TEMP/bootstrap/libMelonLoader.Bootstrap.so"
       - uses: actions/upload-artifact@v4

@@ -49,7 +49,8 @@ namespace MelonLoader.Il2CppAssemblyGenerator
             if (!record.StartsWith(prefix, StringComparison.Ordinal) || record.Length != prefix.Length + 64)
                 throw new InvalidDataException("Invalid hash record");
             using var input = File.OpenRead(file);
-            string actual = Convert.ToHexString(SHA256.HashData(input));
+            using var sha256 = SHA256.Create();
+            string actual = Convert.ToHexString(sha256.ComputeHash(input));
             if (!string.Equals(record.Substring(prefix.Length), actual, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Hash mismatch: " + Path.GetFileName(file));
         }
