@@ -1,0 +1,89 @@
+name: Probe 0.7.3 Android runtime and NativeAOT
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/probe-android-runtime073.yml'
+      - 'AndroidPort073/upstream/MelonLoader.Bootstrap/**'
+      - 'AndroidPort073/upstream/Directory.Build.props'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-runtime:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Inspect runtime and NativeAOT package availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/runtime-probe"
+          python3 - <<'PY' | tee "$RUNNER_TEMP/runtime-probe/nuget-availability.txt"
+          import json, urllib.error, urllib.request
+          packages = [
+              'runtime.linux-bionic-arm64.microsoft.dotnet.ilcompiler',
+              'runtime.android-arm64.microsoft.dotnet.ilcompiler',
+              'runtime.linux-arm64.microsoft.dotnet.ilcompiler',
+              'microsoft.netcore.app.runtime.android-arm64',
+              'microsoft.netcore.app.runtime.mono.android-arm64',
+              'microsoft.netcore.app.runtime.linux-bionic-arm64',
+              'runtime.linux-bionic-arm64.microsoft.netcore.dotnetapphost',
+              'runtime.android-arm64.microsoft.netcore.dotnetapphost',
+          ]
+          for package in packages:
+              url = f'https://api.nuget.org/v3-flatcontainer/{package}/index.json'
+              try:
+                  with urllib.request.urlopen(url, timeout=30) as response:
+                      versions = json.load(response)['versions']
+                  stable = [x for x in versions if '-' not in x]
+                  print(f'{package}: stable={stable[-8:]}')
+              except urllib.error.HTTPError as e:
+                  if e.code == 404: print(f'{package}: not published')
+                  else: raise
+          PY
+      - name: Inspect LemonLoader reference runtime bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error \
+            https://github.com/LemonLoader/MelonLoader/releases/download/0.6.5.1/melon_data.zip \
+            -o "$RUNNER_TEMP/melon_data.zip"
+          unzip -Z1 "$RUNNER_TEMP/melon_data.zip" > "$RUNNER_TEMP/runtime-probe/lemon-bundle-file-list.txt"
+          grep -E '(^|/)(dotnet|hostfxr|coreclr|monosgen|libmain)' "$RUNNER_TEMP/runtime-probe/lemon-bundle-file-list.txt" | head -80 || true
+          sha256sum "$RUNNER_TEMP/melon_data.zip" > "$RUNNER_TEMP/runtime-probe/lemon-bundle-sha256.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-runtime-availability-report
+          path: ${{ runner.temp }}/runtime-probe/
+          if-no-files-found: error
+  nativeaot:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '9.0.x'
+      - name: Install Android NDK
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018"'
+      - name: Attempt 0.7.3 ARM64 bionic NativeAOT bootstrap
+        working-directory: AndroidPort073/upstream
+        shell: bash
+        env:
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
+        run: |
+          set -o pipefail
+          dotnet publish MelonLoader.Bootstrap/MelonLoader.Bootstrap.csproj \
+            -c Release -r linux-bionic-arm64 \
+            -p:RuntimeIdentifiers=linux-bionic-arm64 -p:AndroidPort=true \
+            -p:SolutionDir="$PWD/" -p:AppHostVersion=9.0.0 \
+            -p:DisableUnsupportedError=true -p:PublishAotUsingRuntimePack=true \
+            -p:SkipPublishAfterBuild=true 2>&1 | tee "$RUNNER_TEMP/nativeaot-probe.log"
+          result=${PIPESTATUS[0]}
+          if [[ $result -ne 0 ]]; then
+            grep -E '(^| )error |error [A-Z]+[0-9]+' "$RUNNER_TEMP/nativeaot-probe.log" | tail -15 | while IFS= read -r line; do
+              echo "::error::${line//%/%25}"
+            done
+            exit "$result"
+          fi
