@@ -29,6 +29,26 @@ jobs:
             }
             exit $code
           }
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare synthetic Android APK and real tools
+        shell: pwsh
+        run: WindowsPatcher/Tests/prepare-integration.ps1
+      - name: Test real dex patching, alignment, signing and verification
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'patcher-integration.log'
+          dotnet run --project WindowsPatcher/Tests/Tests.csproj -c Release -- "$env:RUNNER_TEMP/melon-patcher-integration" 2>&1 | Tee-Object -FilePath $log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            Get-Content $log | Select-Object -Last 20 | ForEach-Object {
+              $line = $_.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+              Write-Host "::error::$line"
+            }
+            exit $code
+          }
       - name: Publish self-contained Windows x64 executable
         shell: pwsh
         run: |

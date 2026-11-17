@@ -40,7 +40,7 @@ public sealed partial class ApkPatcher(IToolRunner runner)
             }
 
             progress?.Report("Patching dex with DexPatcher...");
-            await runner.RunAsync(plan.Java, ["-jar", plan.DexPatcher, "--output", patchedDir, sourceDir, plan.DexDirectory],
+            await runner.RunAsync(plan.Java, ["-jar", plan.DexPatcher, "--multi-dex", "--output", patchedDir, sourceDir, plan.DexDirectory],
                 null, cancellationToken);
             var patchedDex = Directory.GetFiles(patchedDir, "*.dex", SearchOption.TopDirectoryOnly)
                 .Where(p => DexName().IsMatch(Path.GetFileName(p))).OrderBy(p => p, StringComparer.Ordinal).ToArray();
@@ -150,11 +150,14 @@ public sealed partial class ApkPatcher(IToolRunner runner)
         AddFiles("native", "*.so", "lib/arm64-v8a/", "libBootstrap.so", "libfunchook.so", "libcapstone.so", "libbhaptics-native-lib.so");
         if (!Directory.GetFiles(Path.Combine(payload, "native"), "libmono*.so").Any())
             throw new FileNotFoundException("Payload must include arm64 Android Mono native libraries.");
+        Span<byte> header = stackalloc byte[20];
         foreach (string so in files.Where(pair => pair.Key.EndsWith(".so", StringComparison.OrdinalIgnoreCase)).Select(pair => pair.Value))
         {
             using var stream = File.OpenRead(so);
-            Span<byte> header = stackalloc byte[20];
-            if (stream.Read(header) != header.Length || !header[..4].SequenceEqual(new byte[] { 0x7f, (byte)'E', (byte)'L', (byte)'F' })
+            if (stream.Length < header.Length)
+                throw new InvalidDataException($"Native library is not a little-endian arm64 ELF: {Path.GetFileName(so)}");
+            stream.ReadExactly(header);
+            if (!header[..4].SequenceEqual(new byte[] { 0x7f, (byte)'E', (byte)'L', (byte)'F' })
                 || header[4] != 2 || header[5] != 1 || header[18] != 0xb7 || header[19] != 0)
                 throw new InvalidDataException($"Native library is not a little-endian arm64 ELF: {Path.GetFileName(so)}");
         }

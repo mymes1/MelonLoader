@@ -12,8 +12,8 @@ GitHub Actions → **Build Windows APK patcher** → select a successful run →
 download `MelonLoader-Legacy-APK-Patcher-Windows-x64`. Extract the ZIP and run
 `MelonLoader.LegacyApkPatcher.exe` on 64-bit Windows. The executable includes the
 .NET runtime. It does **not** include a loader payload, Java, Android SDK tools,
-DexPatcher, a keystore, or Unity files. The workflow tests its packaging logic
-with mocked external tools; it does not produce a patched APK.
+DexPatcher, a keystore, or Unity files. The workflow tests packaging with mocks and also patches, aligns and signs a
+synthetic APK using real tools; it does not produce a game APK or test on a device.
 
 ## Required inputs
 

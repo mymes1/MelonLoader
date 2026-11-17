@@ -1,6 +1,12 @@
 using MelonPatcher.Core;
 using System.IO.Compression;
 
+if (args.Length == 1)
+{
+    await RealIntegration.RunAsync(args[0]);
+    return;
+}
+
 string root = Path.Combine(Path.GetTempPath(), "melonpatcher-tests-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
 try
@@ -90,6 +96,7 @@ sealed class FakeRunner(string? failStep = null) : IToolRunner
         if (args.Contains("--output"))
         {
             step = "dex";
+            if (!args.Contains("--multi-dex")) throw new Exception("multidex flag missing");
             File.WriteAllText(Path.Combine(args[args.IndexOf("--output") + 1], "classes.dex"), "patched");
         }
         else if (args.Contains("sign"))
