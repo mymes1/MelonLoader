@@ -12,15 +12,25 @@ jobs:
   managed-android:
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
       - uses: microsoft/setup-msbuild@v2
       - name: Restore and build Android managed projects
         shell: pwsh
         run: |
-          msbuild MelonLoader.sln -restore -m -p:Configuration=Debug -p:Platform=Android-ARM64
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $log = Join-Path $env:RUNNER_TEMP 'legacy-msbuild.log'
+          msbuild MelonLoader.sln -restore -m -p:Configuration=Debug -p:Platform=Android-ARM64 /fl "/flp:LogFile=$log;Verbosity=normal"
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            if (Test-Path $log) {
+              Get-Content $log | Select-String -Pattern 'error [A-Z]+[0-9]+|error :' | Select-Object -Last 15 | ForEach-Object {
+                $line = $_.Line.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+                Write-Host "::error::$line"
+              }
+            }
+            exit $code
+          }
       - name: Check core output
         shell: pwsh
         run: |
@@ -37,7 +47,7 @@ jobs:
   installer-tests:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Check installer scripts and packaging contracts
         run: |
           bash -n AndroidInstaller/*.sh
