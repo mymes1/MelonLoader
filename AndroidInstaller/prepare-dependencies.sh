@@ -1,42 +1,47 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-TEMP_MONO_BCL=$(realpath "$HOME/CLionProjects/melonloader-mono/sdks/out/android-bcl/monodroid")
-TEMP_MONO_BINARIES=$(realpath "$HOME/CLionProjects/melonloader-mono/sdks/out/android-arm64-v8a-debug/lib")
-TEMP_BHAPTICS_BINARY=$(realpath "$HOME/CLionProjects/MelonLoader/bhaptics_experiments/bhaptics_core/jni/arm64-v8a/libbhaptics-native-lib.so")
+BASE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_DIR=$(cd -- "$BASE_DIR/.." && pwd)
+# These paths refer to separately built Android dependencies, not desktop releases.
+: "${MONO_BCL_DIR:?Set MONO_BCL_DIR to the Android Mono BCL directory}"
+: "${MONO_LIB_DIR:?Set MONO_LIB_DIR to the arm64 Android Mono library directory}"
+: "${BHAPTICS_LIB:?Set BHAPTICS_LIB to the arm64 bHaptics shared library}"
 
-PROJECT_DIR=$(realpath "$(dirname -- "$(readlink -f -- "${BASH_SOURCE}")")/../")
-BASE_DIR=$(realpath "$(dirname -- "$(readlink -f -- "${BASH_SOURCE}")")")
-OUTPUT_BASE="${BASE_DIR}/dependencies"
+CORE="$PROJECT_DIR/Output/Debug/Android/MelonLoader/net4.7.2/MelonLoader.dll"
+SUPPORT="$PROJECT_DIR/Output/Debug/Android/MelonLoader/Dependencies/SupportModules/net4.7.2"
+GEN="$PROJECT_DIR/Output/Debug/AnyCPU/MelonLoader/Dependencies/Il2CppAssemblyGenerator/net4.7.2"
+UNHOLLOWER="$PROJECT_DIR/external/Il2CppAssemblyUnhollower"
+BOOTSTRAP="$PROJECT_DIR/Bootstrap/.cmake/android/debug"
+DEX="$PROJECT_DIR/JavaBindings/build/dex"
 
-MELONLOADER_SUB_PATH="Output/Debug/Android/MelonLoader/net4.7.2"
-SUPPORTMODULES_SUB_PATH="Output/Debug/Android/MelonLoader/Dependencies/SupportModules/net4.7.2"
-IL2CPP_GEN_SUB_PATH="Output/Debug/AnyCPU/MelonLoader/Dependencies/Il2CppAssemblyGenerator/net4.7.2"
-BOOTSTRAP_COMPILE_SUB_PATH="Bootstrap/.cmake/android/debug"
+shopt -s nullglob
+bcl=("$MONO_BCL_DIR"/*.dll)
+mono=("$MONO_LIB_DIR"/*.so)
+support=("$SUPPORT"/*.dll)
+generator=("$GEN"/*.dll)
+dex=("$DEX"/*.dex)
+for group in bcl mono support generator dex; do
+  declare -n files="$group"
+  ((${#files[@]})) || { echo "Missing $group files; check build outputs and .env" >&2; exit 1; }
+done
+extra=("$CORE" "$BHAPTICS_LIB" "$BOOTSTRAP/libBootstrap.so"
+  "$BOOTSTRAP/funchook/libfunchook.so" "$BOOTSTRAP/capstone/libcapstone.so"
+  "$UNHOLLOWER/AssemblyUnhollower/bin/Debug/net4.7.2/AssemblyUnhollower.dll"
+  "$UNHOLLOWER/AssemblyUnhollower/bin/Debug/net4.7.2/Iced.dll"
+  "$UNHOLLOWER/UnhollowerBaseLib/bin/Debug/net4.7.2/UnhollowerBaseLib.dll"
+  "$UNHOLLOWER/UnhollowerRuntimeLib/bin/Debug/net4.7.2/UnhollowerRuntimeLib.dll")
+for file in "${extra[@]}"; do
+  [[ -f "$file" ]] || { echo "Missing required file: $file" >&2; exit 1; }
+done
 
-rm -rf "${OUTPUT_BASE}"
-
-mkdir -p "${OUTPUT_BASE}/dex"
-rsync -Ia "${PROJECT_DIR}/JavaBindings/build/dex/" "${OUTPUT_BASE}/dex"
-
-mkdir -p "${OUTPUT_BASE}/mono/bcl/"
-cp $TEMP_MONO_BCL/*.dll "${OUTPUT_BASE}/mono/bcl/"
-
-mkdir -p "${OUTPUT_BASE}/core/"
-cp "${PROJECT_DIR}/${MELONLOADER_SUB_PATH}/MelonLoader.dll" "${OUTPUT_BASE}/core/"
-
-mkdir -p "${OUTPUT_BASE}/support_modules/"
-cp ${PROJECT_DIR}/${SUPPORTMODULES_SUB_PATH}/*.dll "${OUTPUT_BASE}/support_modules/"
-
-mkdir -p "${OUTPUT_BASE}/assembly_generation/"
-cp ${PROJECT_DIR}/${IL2CPP_GEN_SUB_PATH}/*.dll "${OUTPUT_BASE}/assembly_generation/"
-cp "${PROJECT_DIR}/external/Il2CppAssemblyUnhollower/AssemblyUnhollower/bin/Debug/net4.7.2/AssemblyUnhollower.dll" "${OUTPUT_BASE}/assembly_generation/"
-cp "${PROJECT_DIR}/external/Il2CppAssemblyUnhollower/AssemblyUnhollower/bin/Debug/net4.7.2/Iced.dll" "${OUTPUT_BASE}/assembly_generation/"
-cp "${PROJECT_DIR}/external/Il2CppAssemblyUnhollower/UnhollowerBaseLib/bin/Debug/net4.7.2/UnhollowerBaseLib.dll" "${OUTPUT_BASE}/assembly_generation/"
-cp "${PROJECT_DIR}/external/Il2CppAssemblyUnhollower/UnhollowerRuntimeLib/bin/Debug/net4.7.2/UnhollowerRuntimeLib.dll" "${OUTPUT_BASE}/assembly_generation/"
-
-mkdir -p "${OUTPUT_BASE}/native/"
-cp "${PROJECT_DIR}/${BOOTSTRAP_COMPILE_SUB_PATH}/libBootstrap.so" "${OUTPUT_BASE}/native/"
-cp "${PROJECT_DIR}/${BOOTSTRAP_COMPILE_SUB_PATH}/funchook/libfunchook.so" "${OUTPUT_BASE}/native/"
-cp "${PROJECT_DIR}/${BOOTSTRAP_COMPILE_SUB_PATH}/capstone/libcapstone.so" "${OUTPUT_BASE}/native/"
-cp ${TEMP_MONO_BINARIES}/*.so "${OUTPUT_BASE}/native/"
-cp "${TEMP_BHAPTICS_BINARY}" "${OUTPUT_BASE}/native/"
+OUTPUT_BASE="$BASE_DIR/dependencies"
+rm -rf -- "$OUTPUT_BASE"
+mkdir -p "$OUTPUT_BASE"/{dex,mono/bcl,core,support_modules,assembly_generation,native}
+cp -- "${dex[@]}" "$OUTPUT_BASE/dex/"
+cp -- "${bcl[@]}" "$OUTPUT_BASE/mono/bcl/"
+cp -- "$CORE" "$OUTPUT_BASE/core/"
+cp -- "${support[@]}" "$OUTPUT_BASE/support_modules/"
+cp -- "${generator[@]}" "${extra[@]:5}" "$OUTPUT_BASE/assembly_generation/"
+cp -- "${extra[@]:1:4}" "${mono[@]}" "$OUTPUT_BASE/native/"
+echo "Prepared legacy Android dependencies in $OUTPUT_BASE"

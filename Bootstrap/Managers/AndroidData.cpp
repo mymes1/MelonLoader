@@ -5,6 +5,7 @@
 #include <android/log.h>
 #include <stdio.h>
 #include <string>
+#include <cstring>
 #include <sys/stat.h>
 #include <fcntl.h>
 
@@ -26,23 +27,24 @@ bool AndroidData::Initialize()
 
 void AndroidData::GetAppName()
 {
-    char* buffer = (char*)malloc(sizeof(char) * 0x1000);
-
+    char buffer[0x1000];
     int fd = open("/proc/self/cmdline", O_RDONLY);
-    if (read(fd, buffer, 0x1000) == 0)
+    if (fd < 0)
+    {
+        Assertion::ThrowInternalFailure("Cannot open process command line");
+        return;
+    }
+    ssize_t count = read(fd, buffer, sizeof(buffer) - 1);
+    close(fd);
+    if (count <= 0)
     {
         Assertion::ThrowInternalFailure("Cannot get App name");
         return;
     }
-
-    int nbytesread = strlen(buffer);
-
-    AppName = new char[nbytesread + 1];
-    AppName = (char*)malloc(nbytesread + 1);
-    memcpy(AppName, buffer, nbytesread);
-    AppName[nbytesread] = '\0';
-
-    free(buffer);
+    buffer[count] = '\0';
+    size_t length = strlen(buffer);
+    AppName = new char[length + 1];
+    memcpy(AppName, buffer, length + 1);
 }
 
 void AndroidData::GetDataDir()
@@ -68,10 +70,16 @@ void AndroidData::GetDataDir()
     }
 
     const char* cStr = env->GetStringUTFChars((jstring)jStr, nullptr);
+    if (cStr == nullptr) {
+        env->DeleteLocalRef(jStr);
+        Assertion::ThrowInternalFailure("Failed to read BaseDirectory");
+        return;
+    }
     const size_t cStrSize = strlen(cStr);
     DataDir = new char[cStrSize + 1];
     std::strcpy(DataDir, cStr);
     DataDir[cStrSize] = '\0';
 
+    env->ReleaseStringUTFChars((jstring)jStr, cStr);
     env->DeleteLocalRef(jStr);
 }

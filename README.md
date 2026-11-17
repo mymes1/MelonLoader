@@ -1,3 +1,5 @@
+> **Android fork status:** The existing Android installer targets a legacy 0.4.1-based loader. An [experimental 0.7.3 port](AndroidPort073/README.md) is in progress but is not installable yet. See [legacy APK instructions](AndroidInstaller/Readme.md) before using the desktop instructions below.
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/LavaGang/MelonLoader.Installer/master/Resources/ML_Logo.png">
   <img src="https://raw.githubusercontent.com/LavaGang/MelonLoader.Installer/master/Resources/ML_Text.png">

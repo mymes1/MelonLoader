@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.22)
+project(melonloader073_bridge LANGUAGES C)
+if(NOT ANDROID OR NOT ANDROID_ABI STREQUAL "arm64-v8a")
+  message(FATAL_ERROR "This experimental bridge requires Android arm64-v8a")
+endif()
+add_library(melonloader073_bridge SHARED bridge.c)
+target_link_libraries(melonloader073_bridge PRIVATE log dl)
