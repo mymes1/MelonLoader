@@ -73,3 +73,16 @@ jobs:
             tail -20 "$RUNNER_TEMP/validator.log" | while IFS= read -r line; do echo "::error::${line//%/%25}"; done
             exit "$result"
           fi
+      - name: Publish experimental offline generator for Windows x64
+        run: |
+          dotnet publish AndroidPort073/InteropGen/InteropGen.csproj -c Release -r win-x64 --self-contained true \
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:PublishTrimmed=false -o "$RUNNER_TEMP/interop-gen-win"
+          cp AndroidPort073/README.md "$RUNNER_TEMP/interop-gen-win/README.md"
+          cp AndroidPort073/upstream/LICENSE.md "$RUNNER_TEMP/interop-gen-win/LICENSE.md"
+          cp AndroidPort073/upstream/NOTICE.txt "$RUNNER_TEMP/interop-gen-win/NOTICE.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: melonloader-073-offline-interop-generator-windows-experimental
+          path: ${{ runner.temp }}/interop-gen-win/
+          if-no-files-found: error

@@ -37,7 +37,7 @@ namespace MelonLoader.Il2CppAssemblyGenerator
                 error = null;
                 return true;
             }
-            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ArgumentException)
+            catch (Exception ex) when (ex is IOException || ex is InvalidDataException || ex is UnauthorizedAccessException || ex is ArgumentException)
             {
                 error = ex.Message;
                 return false;
