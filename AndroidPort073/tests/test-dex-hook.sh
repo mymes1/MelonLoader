@@ -29,9 +29,16 @@ import sys
 text = Path(sys.argv[1]).read_text()
 activity = text.split("Class descriptor  : 'Lcom/unity3d/player/UnityPlayerActivity;'", 1)[1]
 activity = activity.split("Class #", 1)[0]
-method = re.search(r"name\s+: 'onCreate'.*?(?=\n\s*#\d+\s+:|\Z)", activity, re.S)
-assert method, 'patched onCreate not found'
-assert 'Lcom/melonloader/port073/Loader073;.initialize' in method.group(), 'onCreate body: ' + repr(method.group())
-assert 'Landroid/app/Activity;.onCreate' in method.group(), 'original body: ' + repr(method.group())
+def method_body(name):
+    match = re.search(r"name\s+: '" + re.escape(name) + r"'.*?(?=\n\s*#\d+\s+:|\Z)", activity, re.S)
+    assert match, 'method not found: ' + name
+    return match.group()
+on_create = method_body('onCreate')
+patch_call = 'onCreate__$prependPatch'
+source_call = 'onCreate__$prependSource'
+assert patch_call in on_create and source_call in on_create, 'prepend wrappers missing: ' + repr(on_create)
+assert on_create.index(patch_call) < on_create.index(source_call), 'hook is not first'
+assert 'Lcom/melonloader/port073/Loader073;.initialize' in method_body(patch_call), 'hook body missing initialize'
+assert 'Landroid/app/Activity;.onCreate' in method_body(source_call), 'original activity body was lost'
 PY
 echo 'Synthetic UnityPlayerActivity contains the 0.7.3 lifecycle hook and original body.'
